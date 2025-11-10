@@ -9,6 +9,23 @@
             <span class="status-dot" />
           </div>
           <div class="phone-screen" v-if="!isPolicyScreen">
+            <div v-if="isCustomPolicyEnabled && selectedLanguages.length > 0" class="preview-lang-switcher">
+              <el-select v-model="previewLanguage" size="small" :popper-class="'preview-lang-popper'"
+                placeholder="选择语言">
+                <template #value="{ value }">
+                  <span class="flag-only" v-if="value">
+                    {{ languageMap[value]?.flag || '' }}
+                  </span>
+                  <span v-else>--</span>
+                </template>
+                <el-option v-for="code in selectedLanguages" :key="code" :value="code" :label="languageMap[code].flag">
+                  <span class="lang-option">
+                    <span class="flag">{{ languageMap[code].flag }}</span>
+                    <span>{{ languageMap[code].shortLabel }}</span>
+                  </span>
+                </el-option>
+              </el-select>
+            </div>
             <div class="login-logo">Brand</div>
             <div class="login-title">欢迎回来</div>
             <div class="login-subtitle">请使用账号登录当前系统</div>
@@ -20,14 +37,32 @@
               Privacy Policy
             </div>
           </div>
-          <div class="phone-screen policy-screen" v-else>
+          <div class="phone-screen policy-screen" v-else :dir="isPolicyRtl ? 'rtl' : 'ltr'">
             <div class="policy-header">
               <el-icon class="back-icon" @click="hidePolicyScreen">
                 <ArrowLeft />
               </el-icon>
-              <span>隐私政策</span>
+              <span>{{ policyScreenTitle }}</span>
+              <div v-if="isCustomPolicyEnabled && selectedLanguages.length > 0" class="preview-lang-switcher">
+                <el-select v-model="previewLanguage" size="small" :popper-class="'preview-lang-popper'"
+                  placeholder="选择语言">
+                  <template #value="{ value }">
+                    <span class="flag-only" v-if="value">
+                      {{ languageMap[value]?.flag || '' }}
+                    </span>
+                    <span v-else>--</span>
+                  </template>
+                  <el-option v-for="code in selectedLanguages" :key="code" :value="code"
+                    :label="languageMap[code].flag">
+                    <span class="lang-option">
+                      <span class="flag">{{ languageMap[code].flag }}</span>
+                      <span>{{ languageMap[code].shortLabel }}</span>
+                    </span>
+                  </el-option>
+                </el-select>
+              </div>
             </div>
-            <div class="policy-body" v-html="activePolicyHtml" />
+            <div class="policy-body" :class="{ 'rtl-content': isPolicyRtl }" v-html="activePolicyHtml" />
           </div>
         </div>
       </el-col>
@@ -58,38 +93,98 @@
                 </el-form-item>
 
                 <template v-else>
+                  <el-form-item label="语言选择">
+                    <el-select v-model="languageToAdd" placeholder="请选择语言" clearable @change="handleAddLanguage"
+                      :disabled="selectedLanguages.length >= 3 || availableLanguageOptions.length === 0">
+                      <el-option v-for="option in availableLanguageOptions" :key="option.value" :value="option.value"
+                        :label="option.label">
+                        <span class="lang-option">
+                          <span class="flag">{{ option.flag }}</span>
+                          <span>{{ option.label }}</span>
+                        </span>
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item v-if="selectedLanguages.length > 0" label="语言内容">
+                    <el-tabs v-model="activeLanguage" class="language-tabs">
+                      <el-tab-pane v-for="code in selectedLanguages" :key="code" :name="code">
+                        <template #label>
+                          <span class="lang-tab-label">
+                            <span class="flag">{{ languageMap[code].flag }}</span>
+                            <span>{{ languageMap[code].shortLabel }}</span>
+                            <el-tooltip content="设置默认回退语言：未配置的语言将使用该语言的隐私政策。" placement="top">
+                              <el-icon class="default-lang" :class="{ active: defaultLanguage === code }"
+                                @click.stop="setDefaultLanguage(code)">
+                                <StarFilled v-if="defaultLanguage === code" />
+                                <Star v-else />
+                              </el-icon>
+                            </el-tooltip>
+                            <el-icon class="remove-lang" @click.stop="removeLanguage(code)">
+                              <Delete />
+                            </el-icon>
+                          </span>
+                        </template>
+                      </el-tab-pane>
+                    </el-tabs>
+                  </el-form-item>
+
+                  <el-form-item label="标题">
+                    <el-input v-model="currentTitle" :placeholder="currentTitlePlaceholder" :disabled="!activeLanguage"
+                      maxlength="60" show-word-limit />
+                  </el-form-item>
+
                   <el-form-item label="编辑器工具栏">
                     <div class="toolbar">
                       <el-tooltip content="一级标题" placement="top">
-                        <el-button size="small" @click="insertHeading(1)">H1</el-button>
+                        <el-button size="small" class="toolbar-btn heading heading-1" @click="insertHeading(1)"
+                          :disabled="!activeLanguage">
+                          H1
+                        </el-button>
                       </el-tooltip>
                       <el-tooltip content="二级标题" placement="top">
-                        <el-button size="small" @click="insertHeading(2)">H2</el-button>
+                        <el-button size="small" class="toolbar-btn heading heading-2" @click="insertHeading(2)"
+                          :disabled="!activeLanguage">
+                          H2
+                        </el-button>
                       </el-tooltip>
                       <el-tooltip content="三级标题" placement="top">
-                        <el-button size="small" @click="insertHeading(3)">H3</el-button>
+                        <el-button size="small" class="toolbar-btn heading heading-3" @click="insertHeading(3)"
+                          :disabled="!activeLanguage">
+                          H3
+                        </el-button>
                       </el-tooltip>
                       <el-divider direction="vertical" />
                       <el-tooltip content="加粗" placement="top">
-                        <el-button size="small" @click="wrapSelection('**', '**')">B</el-button>
+                        <el-button size="small" class="toolbar-btn emphasis bold" @click="wrapSelection('**', '**')"
+                          :disabled="!activeLanguage">
+                          B
+                        </el-button>
                       </el-tooltip>
                       <el-tooltip content="斜体" placement="top">
-                        <el-button size="small" @click="wrapSelection('*', '*')">I</el-button>
+                        <el-button size="small" class="toolbar-btn emphasis italic" @click="wrapSelection('*', '*')"
+                          :disabled="!activeLanguage">
+                          I
+                        </el-button>
                       </el-tooltip>
                       <el-tooltip content="正文段落" placement="top">
-                        <el-button size="small" @click="insertParagraph">P</el-button>
+                        <el-button size="small" class="toolbar-btn paragraph" @click="insertParagraph"
+                          :disabled="!activeLanguage">
+                          P
+                        </el-button>
                       </el-tooltip>
                     </div>
                   </el-form-item>
 
                   <el-form-item label="自定义内容">
-                    <el-input ref="editorRef" v-model="customPolicy" type="textarea"
-                      :autosize="{ minRows: 16, maxRows: 28 }" placeholder="在此输入自定义隐私政策内容，支持 Markdown 基础语法。" />
-                    <el-alert class="custom-hint" type="info" show-icon :closable="false" title="自定义仅支持设置一种语言。" />
+                    <el-input ref="editorRef" v-model="currentPolicy" type="textarea"
+                      :autosize="{ minRows: 16, maxRows: 28 }" :placeholder="currentPlaceholder"
+                      :disabled="!activeLanguage" :class="{ 'rtl-textarea': isRtlLanguage }" />
                   </el-form-item>
 
                   <el-form-item>
-                    <el-button type="primary" @click="handleSave" :loading="isSaving" :disabled="!isDirty || isSaving">
+                    <el-button type="primary" @click="handleSave" :loading="isSaving"
+                      :disabled="!activeLanguage || !isDirty || isSaving">
                       保存
                     </el-button>
                   </el-form-item>
@@ -114,9 +209,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import MarkdownIt from 'markdown-it';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { ArrowLeft, Delete, Star, StarFilled } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import type { InputInstance } from 'element-plus';
 
@@ -125,36 +220,89 @@ const isPolicyScreen = ref(false);
 
 const systemDefaultPolicy = ref<string>(
   [
-    '# 隐私政策',
+    '# Privacy Policy',
     '',
-    '我们致力于保护您的隐私。本隐私政策阐述了我们如何收集、使用与存储您的信息。',
+    'We are committed to protecting your privacy. This policy explains how we collect, use, and store your information.',
     '',
-    '## 信息收集',
+    '## Information Collection',
     '',
-    '我们仅在提供服务所需的情况下收集必要的信息。',
+    'We only collect the data necessary to deliver and improve our services.',
     '',
-    '## 信息使用',
+    '## Information Usage',
     '',
-    '所收集的数据仅用于改进产品体验，不会对外出售。',
+    'All collected information is used internally to enhance your experience and will never be sold to third parties.',
   ].join('\n'),
 );
+
+const languageOptions = [
+  {
+    value: 'zh',
+    label: '中 | Chinese',
+    shortLabel: '中文',
+    flag: '🇨🇳',
+    placeholder: '# 自定义隐私政策\n',
+    headingPlaceholder: '标题',
+    titlePlaceholder: '隐私政策',
+    paragraphPlaceholder: '请输入正文内容',
+  },
+  {
+    value: 'ja',
+    label: '日 | Japanese',
+    shortLabel: '日本語',
+    flag: '🇯🇵',
+    placeholder: '# カスタムプライバシーポリシー\n',
+    headingPlaceholder: 'タイトル',
+    titlePlaceholder: 'プライバシーポリシー',
+    paragraphPlaceholder: '本文を入力してください',
+  },
+  {
+    value: 'en',
+    label: '英 | English',
+    shortLabel: 'English',
+    flag: '🇺🇸',
+    placeholder: '# Custom Privacy Policy\n',
+    headingPlaceholder: 'Heading',
+    titlePlaceholder: 'Privacy Policy',
+    paragraphPlaceholder: 'Enter body content',
+  },
+  {
+    value: 'ar',
+    label: '阿拉伯 | Arabic',
+    shortLabel: 'العربية',
+    flag: '🇸🇦',
+    placeholder: '# سياسة الخصوصية المخصصة\n',
+    headingPlaceholder: 'عنوان',
+    titlePlaceholder: 'سياسة الخصوصية',
+    paragraphPlaceholder: 'يرجى إدخال محتوى النص',
+  },
+];
+
+const languageMap = languageOptions.reduce(
+  (acc, option) => Object.assign(acc, { [option.value]: option }),
+  {} as Record<string, (typeof languageOptions)[number]>,
+);
+
+type CustomPolicyEntry = {
+  title: string;
+  content: string;
+};
 
 const isCustomPolicyEnabled = ref<boolean>(false);
-const customPolicy = ref<string>(
-  [
-    '# 自定义隐私政策',
-    '',
-    '请在此处填写符合您业务需求的隐私政策内容。',
-  ].join('\n'),
-);
-
-const savedCustomPolicy = ref(customPolicy.value);
+const languageToAdd = ref<string>('');
+const customPolicies = ref<Record<string, CustomPolicyEntry>>({});
+const savedCustomPolicies = ref<Record<string, CustomPolicyEntry>>({});
+const activeLanguage = ref<string>('');
+const defaultLanguage = ref<string>('');
+const savedDefaultLanguage = ref<string>('');
+const previewLanguage = ref<string>('');
 
 const isSaving = ref(false);
 const editorRef = ref<InputInstance>();
 
-const activePolicy = computed<string>(() =>
-  isCustomPolicyEnabled.value ? customPolicy.value : systemDefaultPolicy.value,
+const selectedLanguages = computed<string[]>(() => Object.keys(customPolicies.value));
+
+const availableLanguageOptions = computed(() =>
+  languageOptions.filter((option) => !selectedLanguages.value.includes(option.value)),
 );
 
 const markdownRenderer = new MarkdownIt({
@@ -163,8 +311,166 @@ const markdownRenderer = new MarkdownIt({
   typographer: false,
 });
 
+const currentPolicy = computed({
+  get() {
+    if (!activeLanguage.value) {
+      return '';
+    }
+    const entry = customPolicies.value[activeLanguage.value];
+    if (!entry) {
+      return '';
+    }
+    return entry.content ?? '';
+  },
+  set(value: string) {
+    if (!activeLanguage.value) {
+      return;
+    }
+    const entry = customPolicies.value[activeLanguage.value] ?? {
+      title: languageMap[activeLanguage.value]?.titlePlaceholder ?? '',
+      content: '',
+    };
+    customPolicies.value = {
+      ...customPolicies.value,
+      [activeLanguage.value]: {
+        ...entry,
+        content: value,
+      },
+    };
+  },
+});
+
+const currentPlaceholder = computed(() => {
+  if (!activeLanguage.value) {
+    return '请选择语言后开始编辑内容';
+  }
+  return languageMap[activeLanguage.value]?.placeholder ?? '请输入隐私政策内容';
+});
+
+const currentTitle = computed({
+  get() {
+    if (!activeLanguage.value) {
+      return '';
+    }
+    const entry = customPolicies.value[activeLanguage.value];
+    if (!entry) {
+      return languageMap[activeLanguage.value]?.titlePlaceholder ?? '';
+    }
+    return entry.title ?? '';
+  },
+  set(value: string) {
+    if (!activeLanguage.value) {
+      return;
+    }
+    const entry = customPolicies.value[activeLanguage.value] ?? {
+      title: languageMap[activeLanguage.value]?.titlePlaceholder ?? '',
+      content: '',
+    };
+    customPolicies.value = {
+      ...customPolicies.value,
+      [activeLanguage.value]: {
+        ...entry,
+        title: value,
+      },
+    };
+  },
+});
+
+const currentTitlePlaceholder = computed(() => {
+  if (!activeLanguage.value) {
+    return '请选择语言后设置标题';
+  }
+  return languageMap[activeLanguage.value]?.titlePlaceholder ?? 'Privacy Policy';
+});
+
+const isRtlLanguage = computed(() => activeLanguage.value === 'ar');
+
+const previewPolicyLanguage = computed(() => {
+  if (!isCustomPolicyEnabled.value) {
+    return '';
+  }
+  return (
+    previewLanguage.value || defaultLanguage.value || selectedLanguages.value[0] || ''
+  );
+});
+
+const isPolicyRtl = computed(() => previewPolicyLanguage.value === 'ar');
+
+const activePolicy = computed<string>(() => {
+  if (!isCustomPolicyEnabled.value) {
+    return systemDefaultPolicy.value;
+  }
+  const language = previewPolicyLanguage.value;
+  if (language && customPolicies.value[language]) {
+    return customPolicies.value[language].content;
+  }
+  return '';
+});
+
 const activePolicyHtml = computed<string>(() => markdownRenderer.render(activePolicy.value));
-const isDirty = computed<boolean>(() => customPolicy.value !== savedCustomPolicy.value);
+
+const isDirty = computed<boolean>(() => {
+  if (selectedLanguages.value.length === 0) {
+    return false;
+  }
+  return (
+    JSON.stringify(customPolicies.value) !== JSON.stringify(savedCustomPolicies.value) ||
+    defaultLanguage.value !== savedDefaultLanguage.value
+  );
+});
+
+const activePolicyTitle = computed(() => {
+  const language = previewPolicyLanguage.value;
+  if (!language) {
+    return 'Privacy Policy';
+  }
+  const entry = customPolicies.value[language];
+  if (entry) {
+    return entry.title || languageMap[language]?.titlePlaceholder || 'Privacy Policy';
+  }
+  return languageMap[language]?.titlePlaceholder || 'Privacy Policy';
+});
+
+const policyScreenTitle = computed(() => {
+  if (!isCustomPolicyEnabled.value) {
+    return 'Privacy Policy';
+  }
+  return activePolicyTitle.value;
+});
+
+watch(selectedLanguages, (langs) => {
+  if (langs.length === 0) {
+    activeLanguage.value = '';
+    defaultLanguage.value = '';
+    savedDefaultLanguage.value = '';
+    previewLanguage.value = '';
+    isPolicyScreen.value = false;
+    return;
+  }
+  if (!langs.includes(activeLanguage.value)) {
+    activeLanguage.value = langs[0];
+  }
+  if (!langs.includes(defaultLanguage.value)) {
+    defaultLanguage.value = langs[0];
+  }
+  if (!langs.includes(previewLanguage.value)) {
+    previewLanguage.value = defaultLanguage.value
+      ? defaultLanguage.value
+      : langs[0];
+  }
+});
+
+watch(isCustomPolicyEnabled, (enabled) => {
+  if (!enabled) {
+    isPolicyScreen.value = false;
+    previewLanguage.value = '';
+  } else if (selectedLanguages.value.length > 0 && !activeLanguage.value) {
+    activeLanguage.value = selectedLanguages.value[0];
+  }
+  if (enabled && !previewLanguage.value && selectedLanguages.value.length > 0) {
+    previewLanguage.value = defaultLanguage.value || selectedLanguages.value[0];
+  }
+});
 
 function showPolicyScreen() {
   isPolicyScreen.value = true;
@@ -178,19 +484,77 @@ function handleSave() {
   isSaving.value = true;
 
   window.setTimeout(() => {
-    savedCustomPolicy.value = customPolicy.value;
+    savedCustomPolicies.value = JSON.parse(JSON.stringify(customPolicies.value));
+    savedDefaultLanguage.value = defaultLanguage.value;
+    previewLanguage.value = previewPolicyLanguage.value;
     isSaving.value = false;
     ElMessage.success('隐私政策已保存');
   }, 800);
 }
 
+function handleAddLanguage(value: string) {
+  if (!value || selectedLanguages.value.includes(value) || selectedLanguages.value.length >= 3) {
+    languageToAdd.value = '';
+    return;
+  }
+  customPolicies.value = {
+    ...customPolicies.value,
+    [value]: {
+      title: languageMap[value]?.titlePlaceholder ?? '',
+      content: '',
+    },
+  };
+  savedCustomPolicies.value = {
+    ...savedCustomPolicies.value,
+    [value]: {
+      title: languageMap[value]?.titlePlaceholder ?? '',
+      content: '',
+    },
+  };
+  activeLanguage.value = value;
+  if (!defaultLanguage.value) {
+    defaultLanguage.value = value;
+    savedDefaultLanguage.value = value;
+  }
+  if (!previewLanguage.value) {
+    previewLanguage.value = value;
+  }
+  languageToAdd.value = '';
+}
+
+function removeLanguage(code: string) {
+  const { [code]: removed, ...rest } = customPolicies.value;
+  const remaining = Object.keys(rest);
+  customPolicies.value = rest;
+  const { [code]: savedRemoved, ...savedRest } = savedCustomPolicies.value;
+  savedCustomPolicies.value = savedRest;
+  activeLanguage.value = remaining[0] || '';
+  if (defaultLanguage.value === code) {
+    defaultLanguage.value = remaining[0] || '';
+  }
+  if (previewLanguage.value === code) {
+    previewLanguage.value = remaining[0] || defaultLanguage.value || '';
+  }
+  if (!defaultLanguage.value) {
+    savedDefaultLanguage.value = '';
+  }
+}
+
 function insertHeading(level: number) {
   const hashes = '#'.repeat(Math.min(level, 6));
-  insertContent(`${hashes} `, '', '标题');
+  const fallback = level === 1 ? 'Heading' : 'Heading';
+  const label = activeLanguage.value
+    ? languageMap[activeLanguage.value]?.headingPlaceholder ?? fallback
+    : fallback;
+  insertContent(`${hashes} `, '', label);
 }
 
 function insertParagraph() {
-  insertContent('', '', '请输入正文内容');
+  const fallback = 'Enter body content';
+  const label = activeLanguage.value
+    ? languageMap[activeLanguage.value]?.paragraphPlaceholder ?? fallback
+    : fallback;
+  insertContent('', '', label);
 }
 
 function wrapSelection(prefix: string, suffix: string) {
@@ -200,7 +564,7 @@ function wrapSelection(prefix: string, suffix: string) {
 function insertContent(prefix: string, suffix: string, placeholder: string) {
   const textarea = editorRef.value?.textarea;
   if (!textarea) {
-    customPolicy.value = `${prefix}${placeholder}${suffix}`;
+    currentPolicy.value = `${prefix}${placeholder}${suffix}`;
     return;
   }
 
@@ -209,7 +573,7 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   const nextValue =
     value.slice(0, selectionStart) + prefix + selectedText + suffix + value.slice(selectionEnd);
 
-  customPolicy.value = nextValue;
+  currentPolicy.value = nextValue;
 
   nextTick(() => {
     textarea.focus();
@@ -217,6 +581,11 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
     const end = start + selectedText.length;
     textarea.setSelectionRange(start, end);
   });
+}
+
+function setDefaultLanguage(code: string) {
+  defaultLanguage.value = code;
+  previewLanguage.value = code;
 }
 </script>
 
@@ -300,6 +669,62 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   font-size: 14px;
 }
 
+.language-tabs {
+  width: 100%;
+}
+
+.language-tabs :deep(.el-tabs__header) {
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
+.language-tabs :deep(.el-tabs__item) {
+  display: flex;
+  align-items: center;
+}
+
+.lang-option,
+.lang-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.lang-tab-label :deep(.el-icon) {
+  display: flex;
+  align-items: center;
+}
+
+.flag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.flag-only {
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+  font-size: 16px;
+}
+
+.default-lang {
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  font-size: 16px;
+  margin-left: 8px;
+}
+
+.default-lang.active {
+  color: var(--el-color-primary);
+}
+
+.rtl-textarea :deep(textarea) {
+  direction: rtl;
+  text-align: right;
+}
+
 .phone-preview {
   position: relative;
   width: 360px;
@@ -343,11 +768,20 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   flex-direction: column;
   gap: 16px;
   min-height: 540px;
+  position: relative;
 }
 
 .policy-screen {
   gap: 0;
   padding: 24px 20px;
+}
+
+.policy-screen[dir='rtl'] .policy-header {
+  justify-content: flex-end;
+}
+
+.policy-screen[dir='rtl'] .back-icon {
+  transform: scaleX(-1);
 }
 
 .policy-header {
@@ -358,6 +792,29 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   border-bottom: 1px solid rgba(31, 45, 61, 0.12);
   color: var(--el-text-color-primary);
   font-weight: 600;
+}
+
+.policy-header .preview-lang-switcher {
+  position: static;
+  margin-left: auto;
+  width: 72px;
+}
+
+.policy-header .preview-lang-switcher :deep(.el-select__wrapper) {
+  height: 32px;
+  align-items: center;
+}
+
+.policy-header .preview-lang-switcher :deep(.el-select__selection) {
+  justify-content: center;
+}
+
+.policy-header .preview-lang-switcher :deep(.el-select__selection-text) {
+  display: none;
+}
+
+.preview-lang-switcher :deep(.el-select-dropdown__item) {
+  font-size: 12px;
 }
 
 .back-icon {
@@ -377,6 +834,11 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   overflow-y: auto;
   color: var(--el-text-color-primary);
   line-height: 1.6;
+}
+
+.policy-body.rtl-content {
+  direction: rtl;
+  text-align: right;
 }
 
 .policy-body h1,
@@ -458,6 +920,50 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   gap: 8px;
 }
 
+.toolbar :deep(.el-button.is-disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn {
+  width: 42px;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.toolbar-btn.heading {
+  color: var(--el-text-color-primary);
+}
+
+.toolbar-btn.heading-1 {
+  font-size: 18px;
+}
+
+.toolbar-btn.heading-2 {
+  font-size: 16px;
+}
+
+.toolbar-btn.heading-3 {
+  font-size: 14px;
+}
+
+.toolbar-btn.emphasis {
+  font-size: 16px;
+}
+
+.toolbar-btn.bold {
+  font-weight: 700;
+}
+
+.toolbar-btn.italic {
+  font-style: italic;
+}
+
+.toolbar-btn.paragraph {
+  font-size: 14px;
+  font-weight: 500;
+}
+
 :deep(.el-form-item__label) {
   color: var(--el-text-color-regular);
   font-weight: 500;
@@ -481,9 +987,16 @@ function insertContent(prefix: string, suffix: string, placeholder: string) {
   overflow-y: auto;
 }
 
-.custom-hint {
-  margin-top: 12px;
-  width: 100%;
+.preview-lang-switcher {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+}
+
+.preview-lang-popper {
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 @media screen and (max-width: 1024px) {
